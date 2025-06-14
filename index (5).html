@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AniBlk - Minecraft服务器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#000000',
+                        secondary: '#1a1a1a',
+                        accent: '#00ff00',
+                        neutral: '#f5f5f5',
+                        'neutral-dark': '#e0e0e0'
+                    },
+                    fontFamily: {
+                        tech: ['Rajdhani', 'sans-serif'],
+                        minecraft: ['Minecraft', 'Rajdhani', 'sans-serif']
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'float': 'float 3s ease-in-out infinite',
+                        'glow': 'glow 2s ease-in-out infinite alternate'
+                    },
+                    keyframes: {
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-10px)' }
+                        },
+                        glow: {
+                            '0%': { textShadow: '0 0 5px rgba(0, 255, 0, 0.5)' },
+                            '100%': { textShadow: '0 0 15px rgba(0, 255, 0, 0.8), 0 0 30px rgba(0, 255, 0, 0.5)' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .text-shadow {
+                text-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+            }
+            .bg-grid {
+                background-size: 40px 40px;
+                background-image: 
+                    linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+                    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+            }
+            .scanline {
+                background: linear-gradient(to bottom, 
+                    rgba(255, 255, 255, 0) 0%, 
+                    rgba(255, 255, 255, 0.1) 50%, 
+                    rgba(255, 255, 255, 0) 100%);
+                background-size: 100% 4px;
+                pointer-events: none;
+                animation: scan 2s linear infinite;
+            }
+            @keyframes scan {
+                from { background-position: 0px 0px; }
+                to { background-position: 0px 100%; }
+            }
+            .terminal-border {
+                border: 2px solid rgba(0, 255, 0, 0.5);
+                box-shadow: 0 0 15px rgba(0, 255, 0, 0.3) inset;
+            }
+            .glitch {
+                position: relative;
+            }
+            .glitch::before, .glitch::after {
+                content: attr(data-text);
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+            }
+            .glitch::before {
+                left: 2px;
+                text-shadow: -1px 0 red;
+                animation: glitch-anim 2s infinite linear alternate-reverse;
+                clip: rect(44px, 450px, 56px, 0);
+            }
+            .glitch::after {
+                left: -2px;
+                text-shadow: -1px 0 blue;
+                animation: glitch-anim2 3s infinite linear alternate-reverse;
+                clip: rect(44px, 450px, 56px, 0);
+                opacity: 0.7;
+            }
+            @keyframes glitch-anim {
+                0% { clip: rect(82px, 9999px, 3px, 0); }
+                20% { clip: rect(15px, 9999px, 63px, 0); }
+                40% { clip: rect(65px, 9999px, 27px, 0); }
+                60% { clip: rect(44px, 9999px, 11px, 0); }
+                80% { clip: rect(21px, 9999px, 14px, 0); }
+                100% { clip: rect(37px, 9999px, 99px, 0); }
+            }
+            @keyframes glitch-anim2 {
+                0% { clip: rect(23px, 9999px, 75px, 0); }
+                20% { clip: rect(42px, 9999px, 5px, 0); }
+                40% { clip: rect(93px, 9999px, 72px, 0); }
+                60% { clip: rect(21px, 9999px, 44px, 0); }
+                80% { clip: rect(65px, 9999px, 58px, 0); }
+                100% { clip: rect(47px, 9999px, 27px, 0); }
+            }
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-primary text-neutral overflow-x-hidden font-tech">
+    <!-- 开屏动画 -->
+    <div id="splash-screen" class="fixed inset-0 z-50 flex items-center justify-center bg-primary">
+        <div class="text-center">
+            <div class="w-32 h-32 mx-auto border-4 border-accent rounded-lg flex items-center justify-center mb-6">
+                <div class="text-accent text-6xl font-bold glitch" data-text="AniBlk">AniBlk</div>
+            </div>
+            <div class="w-64 h-2 bg-secondary rounded-full overflow-hidden mx-auto">
+                <div id="progress-bar" class="h-full bg-accent w-0 transition-all duration-300"></div>
+            </div>
+            <p class="mt-4 text-accent tracking-widest">LOADING SERVER DATA...</p>
+        </div>
+        <div class="scanline fixed inset-0"></div>
+    </div>
+
+    <!-- 导航栏 -->
+    <nav id="main-nav" class="fixed w-full z-40 transition-all duration-300 bg-primary/80 backdrop-blur-md">
+        <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="flex items-center">
+                <div class="text-accent text-2xl font-bold mr-2">AniBlk</div>
+                <div class="h-4 w-4 bg-accent rounded-full animate-pulse"></div>
+            </div>
+            <div class="hidden md:flex space-x-8">
+                <a href="#home" class="hover:text-accent transition-colors duration-300">首页</a>
+                <a href="#features" class="hover:text-accent transition-colors duration-300">特色</a>
+                <a href="#gameplay" class="hover:text-accent transition-colors duration-300">玩法</a>
+                <a href="#stats" class="hover:text-accent transition-colors duration-300">状态</a>
+                <a href="#faq" class="hover:text-accent transition-colors duration-300">常见问题</a>
+            </div>
+            <div class="flex items-center space-x-4">
+                <a href="https://qm.qq.com/cgi-bin/qm/qr?k=GJ5QN4Yh0S4J1G0kXZ6JZ4JZ7J0J0ZJZ&jump_from=webapi" target="_blank" class="bg-accent text-primary px-4 py-2 rounded-md hover:bg-accent/80 transition-colors duration-300 font-medium">
+                    <i class="fa fa-qq mr-2"></i>加入QQ群
+                </a>
+                <button id="mobile-menu-button" class="md:hidden text-neutral">
+                    <i class="fa fa-bars text-xl"></i>
+                </button>
+            </div>
+        </div>
+        <!-- 移动端菜单 -->
+        <div id="mobile-menu" class="hidden md:hidden bg-secondary/95 backdrop-blur-md">
+            <div class="container mx-auto px-4 py-4 flex flex-col space-y-4">
+                <a href="#home" class="hover:text-accent transition-colors duration-300 py-2">首页</a>
+                <a href="#features" class="hover:text-accent transition-colors duration-300 py-2">特色</a>
+                <a href="#gameplay" class="hover:text-accent transition-colors duration-300 py-2">玩法</a>
+                <a href="#stats" class="hover:text-accent transition-colors duration-300 py-2">状态</a>
+                <a href="#faq" class="hover:text-accent transition-colors duration-300 py-2">常见问题</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主页 -->
+    <section id="home" class="relative min-h-screen flex items-center pt-16 bg-grid overflow-hidden">
+        <div class="absolute inset-0 bg-gradient-to-b from-primary/60 to-primary"></div>
+        <div class="container mx-auto px-4 py-20 relative z-10">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+                <div class="space-y-8">
+                    <div class="inline-block px-4 py-2 bg-accent/20 border border-accent/40 rounded-md">
+                        <p class="text-accent text-sm font-medium">欢迎来到 AniBlk Minecraft 服务器</p>
+                    </div>
+                    <h1 class="text-[clamp(2.5rem,5vw,4rem)] font-bold leading-tight glitch" data-text="AniBlk">
+                        <span class="text-neutral">AniBlk</span>
+                        <span class="text-accent">TECH</span>
+                    </h1>
+                    <p class="text-lg text-neutral-dark max-w-xl">
+                        探索无限可能的科技与休闲并存的Minecraft服务器。加入我们的社区，体验独特的游戏内容和友好的玩家环境。
+                    </p>
+                    <div class="flex flex-wrap gap-4">
+                        <button id="copy-address" class="bg-accent text-primary px-6 py-3 rounded-md hover:bg-accent/80 transition-all duration-300 font-medium flex items-center">
+                            <i class="fa fa-server mr-2"></i>复制服务器地址
+                        </button>
+                        <a href="https://qm.qq.com/cgi-bin/qm/qr?k=GJ5QN4Yh0S4J1G0kXZ6JZ4JZ7J0J0ZJZ&jump_from=webapi" target="_blank" class="bg-transparent border border-accent text-accent px-6 py-3 rounded-md hover:bg-accent/10 transition-all duration-300 font-medium flex items-center">
+                            <i class="fa fa-qq mr-2"></i>加入QQ群
+                        </a>
+                    </div>
+                    <div class="bg-secondary/50 rounded-lg p-4 border border-accent/20">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-neutral-dark">服务器地址</p>
+                                <p id="server-address" class="text-accent font-mono text-lg">node2.yunmc.vip:20311</p>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-sm text-neutral-dark">QQ群号</p>
+                                <p class="text-accent font-mono text-lg">1012271287</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="relative">
+                    <div class="w-full h-[400px] lg:h-[500px] rounded-lg overflow-hidden border-2 border-accent/50 shadow-lg shadow-accent/20">
+                        <!-- 服务器图标将显示在这里 -->
+                        <div id="server-icon-container" class="absolute top-4 left-4 z-10 bg-primary/80 p-2 rounded-lg border border-accent/30">
+                            <img id="server-icon" src="https://picsum.photos/id/169/100/100" alt="服务器图标" class="w-16 h-16 object-contain">
+                        </div>
+                        <img src="https://picsum.photos/id/169/800/600" alt="Minecraft游戏画面" class="w-full h-full object-cover">
+                        <div class="absolute inset-0 bg-gradient-to-t from-primary/80 to-transparent"></div>
+                        <div class="absolute bottom-0 left-0 right-0 p-6">
+                            <div class="flex items-center space-x-3 mb-2">
+                                <div id="status-indicator" class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                                <p class="text-accent font-medium">服务器状态: <span id="server-status">在线</span></p>
+                            </div>
+                            <div class="flex items-center space-x-3 mb-4">
+                                <div class="w-2 h-2 bg-accent rounded-full animate-pulse"></div>
+                                <p class="text-accent font-medium">正在游戏中的玩家: <span id="online-players">0</span>/<span id="max-players">100</span></p>
+                            </div>
+                            <div id="player-list-container" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                                <!-- 玩家列表将动态生成 -->
+                                <div class="flex items-center">
+                                    <div class="w-8 h-8 rounded-full bg-secondary overflow-hidden">
+                                        <img src="https://picsum.photos/id/1005/100/100" alt="玩家头像" class="w-full h-full object-cover">
+                                    </div>
+                                    <p class="ml-2 text-sm">加载中...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="absolute -bottom-4 -right-4 w-24 h-24 bg-accent/20 rounded-full blur-xl"></div>
+                    <div class="absolute -top-4 -left-4 w-24 h-24 bg-accent/20 rounded-full blur-xl"></div>
+                </div>
+            </div>
+        </div>
+        <div class="absolute bottom-10 left-0 right-0 flex justify-center">
+            <a href="#features" class="text-accent animate-bounce">
+                <i class="fa fa-angle-down text-3xl"></i>
+            </a>
+        </div>
+    </section>
+
+    <!-- 特色 -->
+    <section id="features" class="py-20 bg-secondary relative">
+        <div class="container mx-auto px-4">
+            <div class="text-center mb-16">
+                <h2 class="text-[clamp(1.8rem,3vw,2.5rem)] font-bold text-neutral">
+                    服务器<span class="text-accent">特色</span>
+                </h2>
+                <div class="w-24 h-1 bg-accent mx-auto mt-4"></div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <!-- 特色1 -->
+                <div class="bg-primary/50 p-6 rounded-lg border border-accent/20 hover:border-accent/40 transition-all duration-300 group">
+                    <div class="w-16 h-16 bg-accent/10 rounded-lg flex items-center justify-center mb-6 group-hover:bg-accent/20 transition-all duration-300">
+                        <i class="fa fa-rocket text-2xl text-accent"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-neutral mb-3">科技模组</h3>
+                    <p class="text-neutral-dark">
+                        丰富的科技模组让你体验未来科技的魅力，从自动化工厂到太空探索，创造属于你的科技帝国。
+                    </p>
+                </div>
+                
+                <!-- 特色2 -->
+                <div class="bg-primary/50 p-6 rounded-lg border border-accent/20 hover:border-accent/40 transition-all duration-300 group">
+                    <div class="w-16 h-16 bg-accent/10 rounded-lg flex items-center justify-center mb-6 group-hover:bg-accent/20 transition-all duration-300">
+                        <i class="fa fa-tree text-2xl text-accent"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-neutral mb-3">休闲内容</h3>
+                    <p class="text-neutral-dark">
+                        除了科技，我们也有丰富的休闲内容，包括农场、建筑竞赛、小游戏等，让你在游戏中放松身心。
+                    </p>
+                </div>
+                
+                <!-- 特色3 -->
+                <div class="bg-primary/50 p-6 rounded-lg border border-accent/20 hover:border-accent/40 transition-all duration-300 group">
+                    <div class="w-16 h-16 bg-accent/10 rounded-lg flex items-center justify-center mb-6 group-hover:bg-accent/20 transition-all duration-300">
+                        <i class="fa fa-users text-2xl text-accent"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-neutral mb-3">友好社区</h3>
+                    <p class="text-neutral-dark">
+                        我们拥有一个友好、活跃的社区，无论你是新手还是老玩家，都能在这里找到志同道合的朋友。
+                    </p>
+                </div>
+                
+                <!-- 特色4 -->
+                <div class="bg-primary/50 p-6 rounded-lg border border-accent/20 hover:border-accent/40 transition-all duration-300 group">
+                    <div class="w-16 h-16 bg-accent/10 rounded-lg flex items-center justify-center mb-6 group-hover:bg-accent/20 transition-all duration-300">
+                        <i class="fa fa-shield text-2xl text-accent"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-neutral mb-3">专业管理</h3>
+                    <p class="text-neutral-dark">
+                        专业的管理团队确保游戏环境公平、和谐，为玩家提供优质的游戏体验。
+                    </p>
+                </div>
+                
+                <!-- 特色5 -->
+                <div class="bg-primary/50 p-6 rounded-lg border border-accent/20 hover:border-accent/40 transition-all duration-300 group">
+                    <div class="w-16 h-16 bg-accent/10 rounded-lg flex items-center justify-center mb-6 group-hover:bg-accent/20 transition-all duration-300">
+                        <i class="fa fa-wrench text-2xl text-accent"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-neutral mb-3">持续更新</h3>
+                    <p class="text-neutral-dark">
+                        我们不断更新服务器内容，添加新模组、新玩法，保持游戏的新鲜感和趣味性。
+                    </p>
+                </div>
+                
+                <!-- 特色6 -->
+                <div class="bg-primary/50 p-6 rounded-lg border border-accent/20 hover:border-accent/40 transition-all duration-300 group">
+                    <div class="w-16 h-16 bg-accent/10 rounded-lg flex items-center justify-center mb-6 group-hover:bg-accent/20 transition-all duration-300">
+                        <i class="fa fa-paint-brush text-2xl text-accent"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-neutral mb-3">自定义内容</h3>
+                    <p class="text-neutral-dark">
+                        我们有许多自定义内容，包括独特的任务系统、建筑风格和游戏机制，为你带来全新的游戏体验。
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 玩法 -->
+    <section id="gameplay" class="py-20 bg-primary relative">
+        <div class="absolute inset-0 bg-grid opacity-30"></div>
+        <div class="container mx-auto px-4 relative z-10">
+            <div class="text-center mb-16">
+                <h2 class="text-[clamp(1.8rem,3vw,2.5rem)] font-bold text-neutral">
+                    游戏<span class="text-accent">玩法</span>
+                </h2>
+                <div class="w-24 h-1 bg-accent mx-auto mt-4"></div>
+                <p class="text-neutral-dark mt-6 max-w-2xl mx-auto">
+                    探索我们多样化的游戏内容，从科技模组的深度玩法到休闲模式的轻松体验，总有适合你的内容。
+                </p>
+            </div>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+                <div class="order-2 lg:order-1">
+                    <div class="space-y-6">
+                        <div class="bg-secondary/50 p-6 rounded-lg border border-accent/20">
+                            <div class="flex items-start">
+                                <div class="w-12 h-12 bg-accent/10 rounded-lg flex items-center justify-center mr-4 shrink-0">
+                                    <i class="fa fa-cogs text-xl text-accent"></i>
+                                </div>
+                                <div>
+                                    <h3 class="text-xl font-bold text-neutral mb-2">科技探索</h3>
+                                    <p class="text-neutral-dark">
+                                        深入探索各种科技模组，从基础电力到高级量子计算，建造自动化工厂，探索太空，甚至时间旅行。
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-secondary/50 p-6 rounded-lg border border-accent/20">
+                            <div class="flex items-start">
+                                <div class="w-12 h-12 bg-accent/10 rounded-lg flex items-center justify-center mr-4 shrink-0">
+                                    <i class="fa fa-tractor text-xl text-accent"></i>
+                                </div>
+                                <div>
+                                    <h3 class="text-xl font-bold text-neutral mb-2">休闲农场</h3>
+                                    <p class="text-neutral-dark">
+                                        享受慢节奏的农场生活，种植各种作物，饲养动物，打造美丽的田园风光，与其他玩家交易资源。
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-secondary/50 p-6 rounded-lg border border-accent/20">
+                            <div class="flex items-start">
+                                <div class="w-12 h-12 bg-accent/10 rounded-lg flex items-center justify-center mr-4 shrink-0">
+                                    <i class="fa fa-building text-xl text-accent"></i>
+                                </div>
+                                <div>
+                                    <h3 class="text-xl font-bold text-neutral mb-2">创意建筑</h3>
+                                    <p class="text-neutral-dark">
+                                        展示你的建筑才华，在我们的创意建筑区建造任何你想象的东西，参加建筑比赛赢取奖励。
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-secondary/50 p-6 rounded-lg border border-accent/20">
+                            <div class="flex items-start">
+                                <div class="w-12 h-12 bg-accent/10 rounded-lg flex items-center justify-center mr-4 shrink-0">
+                                    <i class="fa fa-gamepad text-xl text-accent"></i>
+                                </div>
+                                <div>
+                                    <h3 class="text-xl font-bold text-neutral mb-2">小游戏</h3>
+                                    <p class="text-neutral-dark">
+                                        参与各种有趣的小游戏，包括PVP竞技场、跑酷地图、解谜游戏等，与其他玩家一决高下。
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="order-1 lg:order-2 relative">
+                    <div class="relative rounded-lg overflow-hidden border-2 border-accent/50 shadow-lg shadow-accent/20">
+                        <img src="https://picsum.photos/id/177/800/600" alt="Minecraft科技模组" class="w-full h-auto">
+                        <div class="absolute inset-0 bg-gradient-to-t from-primary/80 via-primary/40 to-transparent"></div>
+                        <div class="absolute bottom-0 left-0 right-0 p-6">
+                            <h3 class="text-2xl font-bold text-neutral mb-2">科技模组展示</h3>
+                            <p class="text-accent">探索未来科技的无限可能</p>
+                        </div>
+                    </div>
+                    
+                    <div class="absolute -top-6 -right-6 w-32 h-32 bg-accent/10 rounded-full blur-xl"></div>
+                    <div class="absolute -bottom-6 -left-6 w-32 h-32 bg-accent/10 rounded-full blur-xl"></div>
+                    
+                    <div class="grid grid-cols-2 gap-4 mt-6">
+                        <div class="rounded-lg overflow-hidden border border-accent/30">
+                            <img src="https://picsum.photos/id/119/400/300" alt="Minecraft休闲玩法" class="w-full h-auto">
+                        </div>
+                        <div class="rounded-lg overflow-hidden border border-accent/30">
+                            <img src="https://picsum.photos/id/180/400/300" alt="Minecraft建筑展示" class="w-full h-auto">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 服务器状态 -->
+    <section id="stats" class="py-20 bg-secondary relative">
+        <div class="container mx-auto px-4">
+            <div class="text-center mb-16">
+                <h2 class="text-[clamp(1.8rem,3vw,2.5rem)] font-bold text-neutral">
+                    服务器<span class="text-accent">状态</span>
+                </h2>
+                <div class="w-24 h-1 bg-accent mx-auto mt-4"></div>
+                <p class="text-neutral-dark mt-6 max-w-2xl mx-auto">
+                    实时查看服务器状态和玩家数据，了解服务器运行情况。
+                </p>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div class="bg-primary/50 p-6 rounded-lg border border-accent/20">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-medium text-neutral">在线玩家</h3>
+                        <div id="status-dot" class="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                    </div>
+                    <div class="text-4xl font-bold text-accent"><span id="stats-online">0</span>/<span id="stats-max">100</span></div>
+                    <p class="text-neutral-dark mt-2">今日最高: <span id="stats-peak">0</span></p>
+                </div>
+                
+                <div class="bg-primary/50 p-6 rounded-lg border border-accent/20">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-medium text-neutral">服务器负载</h3>
+                        <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+                    </div>
+                    <div class="text-4xl font-bold text-accent"><span id="stats-cpu">38</span>%</div>
+                    <p class="text-neutral-dark mt-2">CPU: <span id="stats-cpu">38</span>% | RAM: <span id="stats-ram">54</span>%</p>
+                </div>
+                
+                <div class="bg-primary/50 p-6 rounded-lg border border-accent/20">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-medium text-neutral">在线时长</h3>
+                        <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+                    </div>
+                    <div class="text-4xl font-bold text-accent"><span id="stats-uptime">168</span>h</div>
+                    <p class="text-neutral-dark mt-2">连续运行时间</p>
+                </div>
+                
+                <div class="bg-primary/50 p-6 rounded-lg border border-accent/20">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-medium text-neutral">玩家总数</h3>
+                        <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+                    </div>
+                    <div class="text-4xl font-bold text-accent"><span id="stats-total">1,248</span></div>
+                    <p class="text-neutral-dark mt-2">注册玩家数量</p>
+                </div>
+            </div>
+            
+            <div class="mt-12 bg-primary/50 p-6 rounded-lg border border-accent/20">
+                <h3 class="text-xl font-bold text-neutral mb-6">最近加入的玩家</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left">
+                        <thead>
+                            <tr class="border-b border-accent/20">
+                                <th class="pb-3 text-neutral-dark">玩家名称</th>
+                                <th class="pb-3 text-neutral-dark">首次加入</th>
+                                <th class="pb-3 text-neutral-dark">上次在线</th>
+                                <th class="pb-3 text-neutral-dark">游戏时长</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="border-b border-accent/10">
+                                <td class="py-3 text-accent">NewPlayer123</td>
+                                <td class="py-3 text-neutral-dark">2025-06-05</td>
+                                <td class="py-3 text-neutral-dark">10分钟前</td>
+                                <td class="py-3 text-neutral-dark">4小时</td>
+                            </tr>
+                            <tr class="border-b border-accent/10">
+                                <td class="py-3 text-accent">MinecraftFan</td>
+                                <td class="py-3 text-neutral-dark">2025-06-04</td>
+                                <td class="py-3 text-neutral-dark">2小时前</td>
+                                <td class="py-3 text-neutral-dark">18小时</td>
+                            </tr>
+                            <tr class="border-b border-accent/10">
+                                <td class="py-3 text-accent">TechGamer</td>
+                                <td class="py-3 text-neutral-dark">2025-06-03</td>
+                                <td class="py-3 text-neutral-dark">1天前</td>
+                                <td class="py-3 text-neutral-dark">32小时</td>
+                            </tr>
+                            <tr class="border-b border-accent/10">
+                                <td class="py-3 text-accent">BuilderPro</td>
+                                <td class="py-3 text-neutral-dark">2025-06-02</td>
+                                <td class="py-3 text-neutral-dark">3天前</td>
+                                <td class="py-3 text-neutral-dark">45小时</td>
+                            </tr>
+                            <tr>
+                                <td class="py-3 text-accent">SurvivalExpert</td>
+                                <td class="py-3 text-neutral-dark">2025-06-01</td>
+                                <td class="py-3 text-neutral-dark">5天前</td>
+                                <td class="py-3 text-neutral-dark">68小时</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 常见问题 -->
+    <section id="faq" class="py-20 bg-primary relative">
+        <div class="absolute inset-0 bg-grid opacity-30"></div>
+        <div class="container mx-auto px-4 relative z-10">
+            <div class="text-center mb-16">
+                <h2 class="text-[clamp(1.8rem,3vw,2.5rem)] font-bold text-neutral">
+                    常见<span class="text-accent">问题</span>
+                </h2>
+                <div class="w-24 h-1 bg-accent mx-auto mt-4"></div>
+                <p class="text-neutral-dark mt-6 max-w-2xl mx-auto">
+                    解答你可能遇到的问题，帮助你快速了解和加入我们的服务器。
+                </p>
+            </div>
+            
+            <div class="max-w-3xl mx-auto">
+                <div class="space-y-6">
+                    <div class="bg-secondary/50 rounded-lg overflow-hidden border border-accent/20">
+                        <button class="faq-toggle w-full flex justify-between items-center p-6 text-left">
+                            <h3 class="text-xl font-bold text-neutral">如何加入AniBlk服务器？</h3>
+                            <i class="fa fa-plus text-accent transition-transform duration-300"></i>
+                        </button>
+                        <div class="faq-content hidden p-6 pt-0 border-t border-accent/10">
+                            <p class="text-neutral-dark">
+                                加入AniBlk服务器非常简单！只需按照以下步骤操作：
+                            </p>
+                            <ol class="list-decimal pl-5 mt-3 space-y-2 text-neutral-dark">
+                                <li>打开Minecraft游戏，确保你使用的是最新版本的Java版。</li>
+                                <li>点击主菜单中的"多人游戏"选项。</li>
+                                <li>点击"添加服务器"按钮。</li>
+                                <li>在"服务器名称"字段中输入"AniBlk"。</li>
+                                <li>在"服务器地址"字段中输入：node2.yunmc.vip:20311</li>
+                                <li>点击"完成"保存服务器信息。</li>
+                                <li>选择新添加的服务器，点击"加入服务器"即可。</li>
+                            </ol>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-secondary/50 rounded-lg overflow-hidden border border-accent/20">
+                        <button class="faq-toggle w-full flex justify-between items-center p-6 text-left">
+                            <h3 class="text-xl font-bold text-neutral">服务器需要什么模组？</h3>
+                            <i class="fa fa-plus text-accent transition-transform duration-300"></i>
+                        </button>
+                        <div class="faq-content hidden p-6 pt-0 border-t border-accent/10">
+                            <p class="text-neutral-dark">
+                                AniBlk服务器使用了多个模组来增强游戏体验。你可以从我们的官方QQ群(1012271287)下载整合包，其中包含了所有必要的模组。安装整合包后，你就可以直接连接服务器，无需额外配置。
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-secondary/50 rounded-lg overflow-hidden border border-accent/20">
+                        <button class="faq-toggle w-full flex justify-between items-center p-6 text-left">
+                            <h3 class="text-xl font-bold text-neutral">服务器有哪些规则？</h3>
+                            <i class="fa fa-plus text-accent transition-transform duration-300"></i>
+                        </button>
+                        <div class="faq-content hidden p-6 pt-0 border-t border-accent/10">
+                            <p class="text-neutral-dark">
+                                为了维护良好的游戏环境，我们制定了以下基本规则：
+                            </p>
+                            <ul class="list-disc pl-5 mt-3 space-y-2 text-neutral-dark">
+                                <li>禁止任何形式的作弊、外挂和利用游戏漏洞。</li>
+                                <li>尊重其他玩家，禁止辱骂、骚扰或恶意攻击他人。</li>
+                                <li>禁止破坏他人建筑或偷窃他人物品，除非得到允许。</li>
+                                <li>请勿在聊天中发送垃圾信息、广告或过度刷屏。</li>
+                                <li>禁止使用不当的用户名或皮肤。</li>
+                                <li>遵守管理员的指令，如有异议请礼貌沟通。</li>
+                            </ul>
+                            <p class="text-neutral-dark mt-3">
+                                违反这些规则可能会导致警告、封禁等处罚。详细规则可以在服务器内/网站上查看。
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-secondary/50 rounded-lg overflow-hidden border border-accent/20">
+                        <button class="faq-toggle w-full flex justify-between items-center p-6 text-left">
+                            <h3 class="text-xl font-bold text-neutral">如何获得管理员帮助？</h3>
+                            <i class="fa fa-plus text-accent transition-transform duration-300"></i>
+                        </button>
+                        <div class="faq-content hidden p-6 pt-0 border-t border-accent/10">
+                            <p class="text-neutral-dark">
+                                如果你在游戏中需要帮助，可以通过以下方式联系管理员：
+                            </p>
+                            <ul class="list-disc pl-5 mt-3 space-y-2 text-neutral-dark">
+                                <li>在游戏中使用"/help"命令寻求帮助。</li>
+                                <li>在游戏聊天中@管理员，我们会尽快回复。</li>
+                                <li>加入我们的QQ群(1012271287)，在群里联系管理员。</li>
+                                <li>在服务器论坛提交问题或建议。</li>
+                            </ul>
+                            <p class="text-neutral-dark mt-3">
+                                管理员团队会尽力为你提供帮助，但请耐心等待，我们可能无法立即响应。
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-secondary/50 rounded-lg overflow-hidden border border-accent/20">
+                        <button class="faq-toggle w-full flex justify-between items-center p-6 text-left">
+                            <h3 class="text-xl font-bold text-neutral">服务器多久更新一次？</h3>
+                            <i class="fa fa-plus text-accent transition-transform duration-300"></i>
+                        </button>
+                        <div class="faq-content hidden p-6 pt-0 border-t border-accent/10">
+                            <p class="text-neutral-dark">
+                                我们会定期更新服务器内容，通常每月至少一次小更新，每季度一次大更新。更新内容可能包括模组更新、新功能添加、性能优化等。更新前我们会在QQ群和网站发布公告，提醒玩家备份数据。
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 底部 -->
+    <footer class="bg-secondary py-12 relative">
+        <div class="container mx-auto px-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                <div>
+                    <div class="flex items-center mb-6">
+                        <div class="text-accent text-2xl font-bold mr-2">AniBlk</div>
+                        <div class="h-4 w-4 bg-accent rounded-full animate-pulse"></div>
+                    </div>
+                    <p class="text-neutral-dark mb-6">
+                        探索无限可能的科技与休闲并存的Minecraft服务器。
+                    </p>
+                    <div class="flex space-x-4">
+                        <a href="https://qm.qq.com/cgi-bin/qm/qr?k=GJ5QN4Yh0S4J1G0kXZ6JZ4JZ7J0J0ZJZ&jump_from=webapi" target="_blank" class="text-neutral hover:text-accent transition-colors duration-300">
+                            <i class="fa fa-qq text-xl"></i>
+                        </a>
+                        <a href="#" class="text-neutral hover:text-accent transition-colors duration-300">
+                            <i class="fa fa-discord text-xl"></i>
+                        </a>
+                        <a href="#" class="text-neutral hover:text-accent transition-colors duration-300">
+                            <i class="fa fa-github text-xl"></i>
+                        </a>
+                        <a href="#" class="text-neutral hover:text-accent transition-colors duration-300">
+                            <i class="fa fa-youtube-play text-xl"></i>
+                        </a>
+                    </div>
+                </div>
+                
+                <div>
+                    <h3 class="text-lg font-bold text-neutral mb-6">快速链接</h3>
+                    <ul class="space-y-3">
+                        <li><a href="#home" class="text-neutral-dark hover:text-accent transition-colors duration-300">首页</a></li>
+                        <li><a href="#features" class="text-neutral-dark hover:text-accent transition-colors duration-300">特色</a></li>
+                        <li><a href="#gameplay" class="text-neutral-dark hover:text-accent transition-colors duration-300">玩法</a></li>
+                        <li><a href="#stats" class="text-neutral-dark hover:text-accent transition-colors duration-300">状态</a></li>
+                        <li><a href="#faq" class="text-neutral-dark hover:text-accent transition-colors duration-300">常见问题</a></li>
+                    </ul>
+                </div>
+                
+                <div>
+                    <h3 class="text-lg font-bold text-neutral mb-6">服务器信息</h3>
+                    <ul class="space-y-3">
+                        <li class="flex items-start">
+                            <i class="fa fa-server text-accent mt-1 mr-3"></i>
+                            <span class="text-neutral-dark">node2.yunmc.vip:20311</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fa fa-qq text-accent mt-1 mr-3"></i>
+                            <span class="text-neutral-dark">1012271287</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fa fa-clock-o text-accent mt-1 mr-3"></i>
+                            <span class="text-neutral-dark">全天候开放</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fa fa-users text-accent mt-1 mr-3"></i>
+                            <span class="text-neutral-dark">最多100名玩家</span>
+                        </li>
+                    </ul>
+                </div>
+                
+                <div>
+                    <h3 class="text-lg font-bold text-neutral mb-6">联系我们</h3>
+                    <ul class="space-y-3">
+                        <li class="flex items-start">
+                            <i class="fa fa-envelope text-accent mt-1 mr-3"></i>
+                            <span class="text-neutral-dark">contact@aniblk.com</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fa fa-comments text-accent mt-1 mr-3"></i>
+                            <span class="text-neutral-dark">QQ群: 1012271287</span>
+                        </li>
+                        <li>
+                            <div class="mt-4 bg-primary/50 p-4 rounded-lg border border-accent/20">
+                                <p class="text-neutral-dark mb-2">订阅更新</p>
+                                <div class="flex">
+                                    <input type="email" placeholder="你的邮箱" class="bg-primary border border-accent/20 rounded-l-md px-4 py-2 w-full focus:outline-none focus:border-accent text-neutral">
+                                    <button class="bg-accent text-primary px-4 rounded-r-md hover:bg-accent/80 transition-colors duration-300">
+                                        <i class="fa fa-paper-plane"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="border-t border-accent/10 mt-12 pt-8 flex flex-col md:flex-row justify-between items-center">
+                <p class="text-neutral-dark text-sm">© 2025 AniBlk Minecraft Server. 保留所有权利。</p>
+                <div class="flex space-x-6 mt-4 md:mt-0">
+                    <a href="#" class="text-neutral-dark hover:text-accent text-sm transition-colors duration-300">服务条款</a>
+                    <a href="#" class="text-neutral-dark hover:text-accent text-sm transition-colors duration-300">隐私政策</a>
+                    <a href="#" class="text-neutral-dark hover:text-accent text-sm transition-colors duration-300">支持</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- 复制成功提示 -->
+    <div id="copy-toast" class="fixed bottom-8 right-8 bg-accent text-primary px-6 py-3 rounded-md shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 flex items-center">
+        <i class="fa fa-check-circle mr-2"></i>
+        <span>服务器地址已复制到剪贴板</span>
+    </div>
+
+    <script>
+        // 开屏动画
+        window.addEventListener('load', () => {
+            const splashScreen = document.getElementById('splash-screen');
+            const progressBar = document.getElementById('progress-bar');
+            
+            // 模拟加载进度
+            let progress = 0;
+            const interval = setInterval(() => {
+                progress += Math.random() * 15;
+                if (progress >= 100) {
+                    progress = 100;
+                    clearInterval(interval);
+                    
+                    // 加载完成后淡出开屏动画
+                    setTimeout(() => {
+                        splashScreen.style.opacity = '0';
+                        splashScreen.style.pointerEvents = 'none';
+                        document.body.style.overflow = 'auto';
+                        
+                        // 开屏动画结束后开始更新服务器状态
+                        updateServerStatus();
+                        setInterval(updateServerStatus, 10000); // 每10秒更新一次
+                    }, 500);
+                }
+                progressBar.style.width = `${progress}%`;
+            }, 200);
+        });
+        
+        // 导航栏滚动效果
+        window.addEventListener('scroll', () => {
+            const nav = document.getElementById('main-nav');
+            if (window.scrollY > 50) {
+                nav.classList.add('py-2');
+                nav.classList.remove('py-4');
+                nav.classList.add('shadow-lg');
+            } else {
+                nav.classList.add('py-4');
+                nav.classList.remove('py-2');
+                nav.classList.remove('shadow-lg');
+            }
+        });
+        
+        // 移动端菜单
+        const mobileMenuButton = document.getElementById('mobile-menu-button');
+        const mobileMenu = document.getElementById('mobile-menu');
+        
+        mobileMenuButton.addEventListener('click', () => {
+            mobileMenu.classList.toggle('hidden');
+        });
+        
+        // 平滑滚动
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                
+                // 关闭移动端菜单
+                mobileMenu.classList.add('hidden');
+                
+                const targetId = this.getAttribute('href');
+                const targetElement = document.querySelector(targetId);
+                
+                if (targetElement) {
+                    window.scrollTo({
+                        top: targetElement.offsetTop - 80,
+                        behavior: 'smooth'
+                    });
+                }
+            });
+        });
+        
+        // FAQ切换
+        document.querySelectorAll('.faq-toggle').forEach(toggle => {
+            toggle.addEventListener('click', () => {
+                const content = toggle.nextElementSibling;
+                const icon = toggle.querySelector('i');
+                
+                // 关闭其他所有FAQ
+                document.querySelectorAll('.faq-content').forEach(item => {
+                    if (item !== content) {
+                        item.classList.add('hidden');
+                        item.previousElementSibling.querySelector('i').classList.remove('fa-minus');
+                        item.previousElementSibling.querySelector('i').classList.add('fa-plus');
+                    }
+                });
+                
+                // 切换当前FAQ
+                content.classList.toggle('hidden');
+                if (!content.classList.contains('hidden')) {
+                    icon.classList.remove('fa-plus');
+                    icon.classList.add('fa-minus');
+                } else {
+                    icon.classList.remove('fa-minus');
+                    icon.classList.add('fa-plus');
+                }
+            });
+        });
+        
+        // 复制服务器地址到剪贴板
+        document.getElementById('copy-address').addEventListener('click', () => {
+            const address = document.getElementById('server-address').textContent;
+            navigator.clipboard.writeText(address).then(() => {
+                const toast = document.getElementById('copy-toast');
+                toast.classList.remove('translate-y-20', 'opacity-0');
+                
+                setTimeout(() => {
+                    toast.classList.add('translate-y-20', 'opacity-0');
+                }, 3000);
+            });
+        });
+        
+        // 更新服务器状态
+        function updateServerStatus() {
+            const serverAddress = 'node2.yunmc.vip:20311';
+            const apiUrl = `https://api.mcsrvstat.us/2/${serverAddress}`;
+            
+            fetch(apiUrl)
+                .then(response => response.json())
+                .then(data => {
+                    console.log('服务器状态数据:', data);
+                    
+                    // 更新服务器图标
+                    const serverIcon = document.getElementById('server-icon');
+                    if (data.icon) {
+                        serverIcon.src = `data:image/png;base64,${data.icon}`;
+                        serverIcon.alt = '服务器图标';
+                    }
+                    
+                    // 更新服务器状态
+                    const statusIndicator = document.getElementById('status-indicator');
+                    const serverStatus = document.getElementById('server-status');
+                    const statusDot = document.getElementById('status-dot');
+                    
+                    if (data.online) {
+                        statusIndicator.className = 'w-2 h-2 bg-green-500 rounded-full animate-pulse';
+                        serverStatus.textContent = '在线';
+                        statusDot.className = 'w-3 h-3 bg-green-500 rounded-full animate-pulse';
+                    } else {
+                        statusIndicator.className = 'w-2 h-2 bg-red-500 rounded-full';
+                        serverStatus.textContent = '离线';
+                        statusDot.className = 'w-3 h-3 bg-red-500 rounded-full';
+                    }
+                    
+                    // 更新玩家数量
+                    const onlinePlayers = document.getElementById('online-players');
+                    const maxPlayers = document.getElementById('max-players');
+                    const statsOnline = document.getElementById('stats-online');
+                    const statsMax = document.getElementById('stats-max');
+                    
+                    if (data.players && data.players.online !== undefined && data.players.max !== undefined) {
+                        onlinePlayers.textContent = data.players.online;
+                        maxPlayers.textContent = data.players.max;
+                        statsOnline.textContent = data.players.online;
+                        statsMax.textContent = data.players.max;
+                    }
+                    
+                    // 更新玩家列表
+                    const playerListContainer = document.getElementById('player-list-container');
+                    playerListContainer.innerHTML = '';
+                    
+                    if (data.players && data.players.list) {
+                        data.players.list.forEach(player => {
+                            const playerElement = document.createElement('div');
+                            playerElement.className = 'flex items-center';
+                            playerElement.innerHTML = `
+                                <div class="w-8 h-8 rounded-full bg-secondary overflow-hidden">
+                                    <img src="https://minotar.net/avatar/${player}/100" alt="${player}的头像" class="w-full h-full object-cover">
+                                </div>
+                                <p class="ml-2 text-sm">${player}</p>
+                            `;
+                            playerListContainer.appendChild(playerElement);
+                        });
+                    } else if (data.online) {
+                        // 如果服务器在线但没有玩家
+                        playerListContainer.innerHTML = `
+                            <div class="flex items-center">
+                                <div class="w-8 h-8 rounded-full bg-secondary overflow-hidden">
+                                    <img src="https://picsum.photos/id/1005/100/100" alt="玩家头像" class="w-full h-full object-cover">
+                                </div>
+                                <p class="ml-2 text-sm">暂无在线玩家</p>
+                            </div>
+                        `;
+                    } else {
+                        // 如果服务器离线
+                        playerListContainer.innerHTML = `
+                            <div class="flex items-center">
+                                <div class="w-8 h-8 rounded-full bg-secondary overflow-hidden">
+                                    <img src="https://picsum.photos/id/1005/100/100" alt="玩家头像" class="w-full h-full object-cover">
+                                </div>
+                                <p class="ml-2 text-sm">服务器离线</p>
+                            </div>
+                        `;
+                    }
+                })
+                .catch(error => {
+                    console.error('获取服务器状态失败:', error);
+                    
+                    // 显示错误状态
+                    const statusIndicator = document.getElementById('status-indicator');
+                    const serverStatus = document.getElementById('server-status');
+                    const statusDot = document.getElementById('status-dot');
+                    
+                    statusIndicator.className = 'w-2 h-2 bg-red-500 rounded-full';
+                    serverStatus.textContent = '无法获取状态';
+                    statusDot.className = 'w-3 h-3 bg-red-500 rounded-full';
+                    
+                    // 清空玩家列表并显示错误信息
+                    const playerListContainer = document.getElementById('player-list-container');
+                    playerListContainer.innerHTML = `
+                        <div class="flex items-center">
+                            <div class="w-8 h-8 rounded-full bg-secondary overflow-hidden">
+                                <img src="https://picsum.photos/id/1005/100/100" alt="玩家头像" class="w-full h-full object-cover">
+                            </div>
+                            <p class="ml-2 text-sm">无法获取玩家数据</p>
+                        </div>
+                    `;
+                });
+        }
+    </script>
+</body>
+</html>    
